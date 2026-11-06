@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Discord Relay</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='9' cy='16' r='5' fill='%235865F2'/%3E%3Ccircle cx='23' cy='16' r='5' fill='%2357F287'/%3E%3Cpath d='M14 16h4' stroke='%23fff' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <!-- Login / first-run -->
+  <section id="auth" class="auth hidden">
+    <form id="auth-form" class="auth-card">
+      <div class="brand"><span class="dot a"></span><span class="dot b"></span> Discord Relay</div>
+      <h1 id="auth-title">Sign in</h1>
+      <p id="auth-help" class="muted"></p>
+      <input id="auth-password" type="password" placeholder="Password" autocomplete="current-password" required>
+      <input id="auth-password2" type="password" placeholder="Repeat password" class="hidden" autocomplete="new-password">
+      <button class="btn primary" type="submit" id="auth-submit">Sign in</button>
+      <p id="auth-error" class="error"></p>
+    </form>
+  </section>
+
+  <!-- App -->
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <div class="brand"><span class="dot a"></span><span class="dot b"></span> Discord Relay</div>
+      <nav id="tabs">
+        <button data-tab="dashboard" class="active">Dashboard</button>
+        <button data-tab="rules">Relays</button>
+        <button data-tab="activity">Activity</button>
+        <button data-tab="settings">Settings</button>
+      </nav>
+      <div class="status-pill" id="status-pill"><span class="led"></span><span id="status-text">…</span></div>
+    </header>
+
+    <main>
+      <!-- Dashboard -->
+      <section id="tab-dashboard" class="tab">
+        <div id="setup-banner" class="banner hidden"></div>
+        <div class="grid3">
+          <div class="card stat"><div class="label">Bot</div><div class="value" id="d-bot">—</div><div class="sub" id="d-bot-sub"></div></div>
+          <div class="card stat"><div class="label">Servers</div><div class="value" id="d-guilds">—</div><div class="sub">the bot can see</div></div>
+          <div class="card stat"><div class="label">Relay rules</div><div class="value" id="d-rules">—</div><div class="sub" id="d-rules-sub"></div></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Add the bot to a server</h2></div>
+          <p class="muted">The bot must be a member of <b>both</b> the server you copy from and the server you post to. Open this link while signed in to Discord and choose a server (you need “Manage Server” there).</p>
+          <div class="row"><input id="invite-url" readonly placeholder="Connect the bot first"><button class="btn" id="copy-invite">Copy</button><a class="btn primary" id="open-invite" target="_blank" rel="noopener">Open</a></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Servers</h2><button class="btn ghost small" id="refresh-guilds">Refresh</button></div>
+          <div id="guild-list" class="guild-list"><p class="muted">Connect the bot to see servers.</p></div>
+        </div>
+      </section>
+
+      <!-- Rules -->
+      <section id="tab-rules" class="tab hidden">
+        <div class="section-head">
+          <div><h2>Relays</h2><p class="muted">Each relay copies new messages from its source channel(s) to its destination channel(s) the moment Discord delivers them.</p></div>
+          <button class="btn primary" id="new-rule">+ New relay</button>
+        </div>
+        <div id="rule-list"></div>
+      </section>
+
+      <!-- Activity -->
+      <section id="tab-activity" class="tab hidden">
+        <div class="section-head">
+          <div><h2>Activity</h2><p class="muted">Most recent first. Kept in memory (clears on restart).</p></div>
+          <label class="check"><input type="checkbox" id="show-filtered" checked> Show filtered messages</label>
+        </div>
+        <div class="card flush"><ul id="activity-list" class="activity"></ul></div>
+      </section>
+
+      <!-- Settings -->
+      <section id="tab-settings" class="tab hidden">
+        <div class="card">
+          <div class="card-head"><h2>Bot token</h2></div>
+          <p class="muted" id="token-help">Paste the token from Discord Developer Portal → your application → <b>Bot</b> → <b>Reset Token</b>. It is stored in the app's data folder.</p>
+          <div class="row"><input id="token-input" type="password" placeholder="Bot token" autocomplete="off"><button class="btn primary" id="save-token">Save &amp; connect</button></div>
+          <div class="row"><button class="btn ghost" id="restart-bot">Reconnect bot</button></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Web UI password</h2></div>
+          <p class="muted" id="pw-help"></p>
+          <div class="row" id="pw-row">
+            <input id="pw-current" type="password" placeholder="Current password" autocomplete="current-password">
+            <input id="pw-new" type="password" placeholder="New password (8+ chars)" autocomplete="new-password">
+            <button class="btn" id="save-pw">Change</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Session</h2></div>
+          <button class="btn ghost" id="logout">Sign out</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Rule editor -->
+  <dialog id="rule-dialog">
+    <form id="rule-form" method="dialog">
+      <div class="dialog-head">
+        <h2 id="rule-dialog-title">Relay</h2>
+        <label class="switch"><input type="checkbox" name="enabled" checked><span></span> Enabled</label>
+      </div>
+      <div class="dialog-body">
+        <label class="field"><span>Name</span><input name="name" required maxlength="100" placeholder="e.g. Game updates → our #news"></label>
+
+        <fieldset>
+          <legend>1 · Copy from</legend>
+          <div class="picker" data-picker="source_channel_ids" data-kind="channel"></div>
+          <p class="hint">Standard text channels and Announcement channels both work. The bot needs <i>View Channel</i> + <i>Read Message History</i> there.</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>2 · Only relay messages from…</legend>
+          <p class="hint">Leave both empty to relay everyone. If either is filled, a message is relayed when its author is listed <b>or</b> has one of the roles.</p>
+          <label class="field"><span>People</span></label>
+          <div class="picker" data-picker="author_user_ids" data-kind="user"></div>
+          <button type="button" class="btn ghost small" id="load-authors">Pick from recent posters in the source channel</button>
+          <div id="author-suggestions" class="suggestions"></div>
+          <label class="field"><span>Roles</span></label>
+          <div class="picker" data-picker="author_role_ids" data-kind="role"></div>
+          <label class="check"><input type="checkbox" name="include_bots"> Also relay bots &amp; webhooks when no people/roles are listed</label>
+          <div class="two">
+            <label class="field"><span>Must contain one of (one per line)</span><textarea name="keywords_include" rows="2" placeholder="optional"></textarea></label>
+            <label class="field"><span>Skip if it contains (one per line)</span><textarea name="keywords_exclude" rows="2" placeholder="optional"></textarea></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>3 · Post to</legend>
+          <div class="picker" data-picker="destination_channel_ids" data-kind="channel"></div>
+          <p class="hint" id="dest-warnings"></p>
+        </fieldset>
+
+        <fieldset>
+          <legend>4 · How it looks</legend>
+          <div class="modes">
+            <label><input type="radio" name="mode" value="webhook" checked><div><b>Mirror</b><small>Uses a webhook so it shows the original poster's name &amp; avatar. Needs <i>Manage Webhooks</i>.</small></div></label>
+            <label><input type="radio" name="mode" value="embed"><div><b>Card</b><small>Bot posts an embed card with author, source and link back.</small></div></label>
+            <label><input type="radio" name="mode" value="plain"><div><b>Plain</b><small>Bot posts text with a “Name · Server #channel” line.</small></div></label>
+          </div>
+          <label class="check" id="show-source-wrap"><input type="checkbox" name="show_source_in_name" checked> Add the source server name after the poster's name</label>
+          <div class="two">
+            <label class="field"><span>Text to put above each message</span><input name="prefix_text" maxlength="500" placeholder="optional, e.g. 📢 New announcement"></label>
+            <label class="field"><span>Ping a role in the destination</span><select name="ping_role_id"><option value="">No ping</option></select></label>
+          </div>
+          <label class="check"><input type="checkbox" name="clean_mentions" checked> Turn @mentions into plain names (they don't work across servers anyway)</label>
+          <label class="check"><input type="checkbox" name="copy_attachments" checked> Re-upload images &amp; files (falls back to links if too large)</label>
+          <label class="check"><input type="checkbox" name="sync_edits" checked> Update the copy when the original is edited</label>
+          <label class="check"><input type="checkbox" name="sync_deletes" checked> Delete the copy when the original is deleted</label>
+          <label class="check"><input type="checkbox" name="auto_publish"> Auto-publish when the destination is an Announcement channel (needs <i>Manage Messages</i>)</label>
+          <p class="hint">@everyone / @here and user/role pings in relayed messages never ping anyone — only the role chosen above does.</p>
+        </fieldset>
+        <p class="error" id="rule-error"></p>
+      </div>
+      <div class="dialog-foot">
+        <button type="button" class="btn danger ghost" id="delete-rule">Delete</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" id="cancel-rule">Cancel</button>
+        <button type="submit" class="btn primary">Save relay</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

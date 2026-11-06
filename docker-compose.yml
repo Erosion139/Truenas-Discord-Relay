@@ -1,0 +1,19 @@
+# Docker Compose definition. Works with plain `docker compose up -d`, and can be pasted
+# into TrueNAS: Apps → Discover Apps → ⋮ → Install via YAML (see docs/TRUENAS_INSTALL.md).
+# Replace YOUR-GITHUB-USER/YOUR-REPO with your own (all lowercase).
+services:
+  discord-relay:
+    image: ghcr.io/YOUR-GITHUB-USER/YOUR-REPO:latest
+    container_name: discord-relay
+    restart: unless-stopped
+    ports:
+      - "8085:8080"            # host:container — open http://<truenas-ip>:8085
+    environment:
+      TZ: America/New_York
+      # Optional. If unset, paste the token in the web UI instead.
+      # DISCORD_TOKEN: "your-bot-token"
+      # Optional. If unset, the web UI asks you to create a password on first visit.
+      # WEB_PASSWORD: "choose-a-strong-password"
+    volumes:
+      # TrueNAS: point this at a dataset, e.g. /mnt/tank/apps/discord-relay
+      - ./data:/data
